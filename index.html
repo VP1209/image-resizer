@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Same-Size Image Resizer</title>
+<style>
+:root{--bg:#f3f5f7;--panel:#fff;--ink:#1b2530;--mut:#66727f;--line:#d5dbe1;--acc:#1f6f8b;--acc-ink:#fff;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12171c;--panel:#1b232b;--ink:#e8edf2;--mut:#93a0ad;--line:#2f3b46;--acc:#5bb4d1;--acc-ink:#0c1a21}}
+:root[data-theme="dark"]{--bg:#12171c;--panel:#1b232b;--ink:#e8edf2;--mut:#93a0ad;--line:#2f3b46;--acc:#5bb4d1;--acc-ink:#0c1a21}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",system-ui,-apple-system,Helvetica,Arial,sans-serif;line-height:1.45}
+main{max-width:980px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:1.5rem;margin:0 0 4px}
+p.sub{margin:0 0 20px;color:var(--mut)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+.drop{border:2px dashed var(--line);border-radius:10px;padding:28px;text-align:center;cursor:pointer;color:var(--mut)}
+.drop.over,.drop:focus-visible{border-color:var(--acc);outline:none;color:var(--ink)}
+.row{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end}
+label{display:flex;flex-direction:column;gap:4px;font-size:.85rem;color:var(--mut)}
+input[type=number],select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;min-width:120px}
+button{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:6px;padding:9px 14px;cursor:pointer}
+button.primary{background:var(--acc);color:var(--acc-ink);border-color:var(--acc);font-weight:600}
+button:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.hint{font-size:.85rem;color:var(--mut);margin:10px 0 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+.card{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--bg)}
+.thumb{aspect-ratio:var(--ar,4/3);background:repeating-conic-gradient(#8883 0 25%,transparent 0 50%) 0 0/16px 16px;display:flex}
+.thumb img{width:100%;height:100%;object-fit:contain}
+.meta{padding:8px 10px;font-size:.78rem;color:var(--mut);word-break:break-all}
+.meta b{color:var(--ink);font-weight:600;display:block}
+.meta a,.meta button{font-size:.78rem;padding:4px 8px;margin-top:6px;display:inline-block;color:var(--acc);text-decoration:none;border:1px solid var(--line);border-radius:5px;background:transparent}
+.x{float:right;padding:0 6px !important;margin:0 !important;border:0 !important;color:var(--mut) !important;font-size:1rem !important}
+#status{font-size:.9rem;color:var(--mut)}
+</style>
+</head>
+<body>
+<main>
+  <h1>Same-Size Image Resizer</h1>
+  <p class="sub">Add horizontal and vertical photos, enter one width and height, and every image comes out at exactly that size.</p>
+
+  <div class="panel">
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose images">
+      Drop images here, or click to choose files
+      <input type="file" id="file" accept="image/*" multiple hidden>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="row">
+      <label>Width (px)<input type="number" id="w" value="1920" min="1" max="10000"></label>
+      <label>Height (px)<input type="number" id="h" value="1080" min="1" max="10000"></label>
+      <label>How to fit vertical photos
+        <select id="mode">
+          <option value="crop">Crop to fill (no empty space)</option>
+          <option value="blur">Extend with blurred edges (no cropping)</option>
+          <option value="fit">Fit inside (add background bars)</option>
+          <option value="stretch">Stretch (may distort)</option>
+        </select>
+      </label>
+      <label>Bar color<input type="color" id="bg" value="#000000" style="height:38px;width:70px"></label>
+      <label>File name prefix<input type="text" id="prefix" placeholder="e.g. Shimpla Resort" style="font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;min-width:200px"></label>
+      <label>Start number<input type="number" id="start" value="1" min="0"></label>
+      <label>Format
+        <select id="fmt"><option value="image/jpeg">JPG</option><option value="image/png">PNG</option><option value="image/webp">WebP</option></select>
+      </label>
+    </div>
+    <p class="hint">Crop keeps the image centered and trims the extra edges. Fit keeps the whole photo and fills the rest with the bar color.</p>
+  </div>
+
+  <div class="panel">
+    <div class="row" style="margin-bottom:14px">
+      <button class="primary" id="go" disabled>Resize images</button>
+      <button id="zip" disabled>Download all (ZIP)</button>
+      <button id="clear" disabled>Clear</button>
+      <span id="status">No images added yet.</span>
+    </div>
+    <div class="grid" id="grid"></div>
+  </div>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+let items = []; // {file, url, img, out:{blob,url,name}}
+
+const drop = $('drop'), fileIn = $('file');
+drop.onclick = () => fileIn.click();
+drop.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileIn.click(); } };
+drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
+drop.ondragleave = () => drop.classList.remove('over');
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove('over'); add(e.dataTransfer.files); };
+fileIn.onchange = () => { add(fileIn.files); fileIn.value = ''; };
+
+function add(list) {
+  [...list].filter(f => f.type.startsWith('image/')).forEach(file => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => { items.push({ file, url, img, out: null }); render(); };
+    img.src = url;
+  });
+}
+
+function render() {
+  const g = $('grid'); g.innerHTML = '';
+  items.forEach((it, i) => {
+    const iw = it.img.naturalWidth, ih = it.img.naturalHeight;
+    const c = document.createElement('div'); c.className = 'card';
+    const src = it.out ? it.out.url : it.url;
+    c.innerHTML = `<div class="thumb" style="--ar:${it.out ? $('w').value + '/' + $('h').value : iw + '/' + ih}"><img src="${src}" alt=""></div>
+      <div class="meta"><button class="x" title="Remove" aria-label="Remove">×</button><b></b>
+      ${it.out ? 'Resized: ' + it.out.w + '×' + it.out.h : 'Original: ' + iw + '×' + ih + (ih > iw ? ' (vertical)' : ' (horizontal)')}
+      ${it.out ? '<br><button class="dl">Download</button>' : ''}</div>`;
+    c.querySelector('b').textContent = it.file.name;
+    const dl = c.querySelector('.dl');
+    if (dl) dl.onclick = () => save(it.out.name, it.out.blob);
+    c.querySelector('.x').onclick = () => { items.splice(i, 1); render(); };
+    g.appendChild(c);
+  });
+  const has = items.length > 0;
+  $('go').disabled = !has; $('clear').disabled = !has;
+  $('zip').disabled = !items.some(i => i.out);
+  $('status').textContent = has ? items.length + ' image' + (items.length > 1 ? 's' : '') + ' added.' : 'No images added yet.';
+}
+
+$('clear').onclick = () => { items = []; render(); };
+
+function draw(img, W, H, mode, bg) {
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const x = c.getContext('2d'); x.imageSmoothingQuality = 'high';
+  const iw = img.naturalWidth, ih = img.naturalHeight;
+  if (mode === 'stretch') { x.drawImage(img, 0, 0, W, H); }
+  else if (mode === 'blur') {
+    // Background: same photo scaled to cover the frame, then softened by shrinking and re-enlarging
+    const t = document.createElement('canvas'), tw = Math.max(8, Math.round(W / 40)), th = Math.max(8, Math.round(H / 40));
+    t.width = tw; t.height = th;
+    const tx = t.getContext('2d'); tx.imageSmoothingQuality = 'high';
+    const cs = Math.max(tw / iw, th / ih);
+    tx.drawImage(img, (tw - iw * cs) / 2, (th - ih * cs) / 2, iw * cs, ih * cs);
+    x.drawImage(t, 0, 0, W, H);
+    x.fillStyle = 'rgba(0,0,0,0.25)'; x.fillRect(0, 0, W, H);
+    const s = Math.min(W / iw, H / ih), dw = iw * s, dh = ih * s;
+    x.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
+  }
+  else if (mode === 'crop') {
+    const s = Math.max(W / iw, H / ih), sw = W / s, sh = H / s;
+    x.drawImage(img, (iw - sw) / 2, (ih - sh) / 2, sw, sh, 0, 0, W, H);
+  } else {
+    x.fillStyle = bg; x.fillRect(0, 0, W, H);
+    const s = Math.min(W / iw, H / ih), dw = iw * s, dh = ih * s;
+    x.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
+  }
+  return c;
+}
+
+$('go').onclick = async () => {
+  const W = Math.round(+$('w').value), H = Math.round(+$('h').value);
+  if (!(W > 0 && H > 0)) { $('status').textContent = 'Enter a valid width and height.'; return; }
+  const mode = $('mode').value, bg = $('bg').value, fmt = $('fmt').value;
+  const ext = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[fmt];
+  const prefix = $('prefix').value.replace(/[\\/:*?"<>|]/g, '').trim(), start = parseInt($('start').value, 10) || 0;
+  $('status').textContent = 'Resizing…';
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    const canvas = draw(it.img, W, H, mode, bg);
+    const blob = await new Promise(r => canvas.toBlob(r, fmt, 0.92));
+    if (it.out) URL.revokeObjectURL(it.out.url);
+    const name = prefix ? prefix + ' ' + (start + i) + '.' + ext : it.file.name.replace(/\.[^.]+$/, '') + '.' + ext;
+    it.out = { blob, url: URL.createObjectURL(blob), w: W, h: H, name };
+  }
+  render(); $('status').textContent = 'Done. ' + items.length + ' image(s) resized to ' + W + '×' + H + '.';
+};
+
+$('zip').onclick = async () => {
+  const z = new JSZip();
+  items.forEach(it => it.out && z.file(it.out.name, it.out.blob));
+  const blob = await z.generateAsync({ type: 'blob' });
+  save('resized_images.zip', blob);
+};
+
+function save(filename, blob) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  $('status').textContent = 'Saved ' + filename + '.';
+}
+</script>
+</body>
+</html>
